@@ -1,8 +1,8 @@
 import zoneinfo
 from datetime import datetime
 
-from fastapi import FastAPI
-from models import Customer, CustomerCreate, Transaction, Invoice
+from fastapi import FastAPI, HTTPException, status
+from models import Customer, CustomerCreate, Transaction, Invoice, CustomerBase
 from db import SessionDep, create_all_tables
 from sqlmodel import select
 
@@ -43,15 +43,39 @@ async def create_customer(customer_data: CustomerCreate, session: SessionDep):
     session.refresh(customer)
     return customer
 
+@app.get("/customers/{customer_id}", response_model=Customer)
+async def read_customer(customer_id: int, session: SessionDep):
+    customer_db = session.get(Customer, customer_id)
+    if not customer_db:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer doesnt exist")
+    return customer_db
+
+@app.patch("/customers/{customer_id}", response_model=Customer)
+async def update_customer(customer_id: int, customer_data: CustomerBase, session: SessionDep):
+    customer_db = session.get(Customer, customer_id)
+    if not customer_db:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer doesnt exist")
+    customerData = customer_data.model_dump()
+    customer_db.sqlmodel_update(customerData)
+    session.commit()
+    session.refresh(customer_db)
+    return customer_db
+
+
+@app.delete("/customers/{customer_id}", response_model=Customer)
+async def delete_customer(customer_id: int, session: SessionDep):
+    customer_db = session.get(Customer, customer_id)
+    if not customer_db:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer doesnt exist")
+    session.delete(customer_db)
+    session.commit()
+    return {"detail": "Customer deleted successfully"}
+
+
 @app.get("/customers/", response_model=list[Customer])
 async def list_customers(session: SessionDep):
     return session.exec(select(Customer)).all()
     
-
-
-@app.get("/customer/{id_customer}", response_model=Customer)
-async def get_customer(id_customer: int):
-    return db_customers[id_customer]
 
 @app.post("/transactions/")
 async def create_transaction(transaction_data: Transaction):
